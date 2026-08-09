@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os 
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -78,13 +80,18 @@ WSGI_APPLICATION = 'quantum_core.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+# ==========================================
+# DATABASE CLOUD ROUTING
+# ==========================================
+# This will use a cloud PostgreSQL URL if available, 
+# otherwise it falls back to local SQLite for development.
+
+DATABASES = {
+    'default': dj_database_url.config(
+        default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'),
+        conn_max_age=600
+    )
 }
-
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -147,3 +154,6 @@ EMAIL_HOST_USER = 'devroy12032015@gmail.com'
 # Enter the 16-letter App Password you generated (No spaces)
 EMAIL_HOST_PASSWORD = 'your_password_here' # Replace with your actual App Password
 FRONTEND_URL = 'http://localhost:5173'  # Your React app dev URL
+
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
