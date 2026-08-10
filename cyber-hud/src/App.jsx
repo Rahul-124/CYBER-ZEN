@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -391,6 +392,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <Analytics />
     </div>
   );
 }
