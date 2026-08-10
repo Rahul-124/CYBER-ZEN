@@ -40,12 +40,12 @@ export default function App() {
 
   const fetchTasks = async (token) => {
     try {
-      const taskRes = await axios.get('http://127.0.0.1:8000/api/tasks/', {
+      const taskRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/tasks/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setTasks(taskRes.data);
 
-      const calRes = await axios.get('http://127.0.0.1:8000/api/calendar/', {
+      const calRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/calendar/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCalendarData(calRes.data);
@@ -59,7 +59,7 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/token/', { username, password });
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/token/`, { username, password });
       localStorage.setItem('access_token', res.data.access);
       localStorage.setItem('refresh_token', res.data.refresh);
       setIsAuthenticated(true);
@@ -73,7 +73,7 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      await axios.post('http://127.0.0.1:8000/api/register/', { username, email, password });
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/register/`, { username, email, password });
       setMessage('Identity created! Authenticating...');
       // Auto login after registration
       setTimeout(() => handleLogin(e), 1000);
@@ -86,7 +86,7 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/password-reset/', { email });
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/password-reset/`, { email });
       setMessage(res.data.message);
       if (res.data.uid) setResetUid(res.data.uid);
       setAuthMode('reset_confirm');
@@ -99,7 +99,7 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/password-reset/confirm/', {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/password-reset/confirm/`, {
         uid: resetUid,
         token: resetToken,
         new_password: newPassword
@@ -126,7 +126,7 @@ export default function App() {
     if (!newTask.trim()) return;
     const token = localStorage.getItem('access_token');
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/tasks/', 
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/tasks/`,
         { title: newTask, is_completed: false },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -140,7 +140,7 @@ export default function App() {
   const toggleTask = async (id, currentStatus) => {
     const token = localStorage.getItem('access_token');
     try {
-      const res = await axios.patch(`http://127.0.0.1:8000/api/tasks/${id}/`, 
+      const res = await axios.patch(`${import.meta.env.VITE_API_URL}/api/tasks/${id}/`, 
         { is_completed: !currentStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -153,7 +153,8 @@ export default function App() {
   const deleteTask = async (id) => {
     const token = localStorage.getItem('access_token');
     try {
-      await axios.delete(`http://127.0.0.1:8000/api/tasks/${id}/`, {
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/tasks/${id}/`,
+       {
         headers: { Authorization: `Bearer ${token}` }
       });
       setTasks(tasks.filter(t => t.id !== id));
