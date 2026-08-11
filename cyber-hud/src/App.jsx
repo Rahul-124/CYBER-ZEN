@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft } from 'lucide-react';
+import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft, Zap } from 'lucide-react';
 import axios from 'axios';
-import { Analytics } from '@vercel/analytics/react';
+import FocusMode from './FocusMode';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'reset_request' | 'reset_confirm'
+  const [focusTask, setFocusTask] = usestate(null);
 
   // Form Fields
   const [username, setUsername] = useState('');
@@ -375,13 +376,29 @@ export default function App() {
                         {task.title}
                       </span>
                     </div>
+
+                    <div className="flex items-center gap-2">
+
                     
-                    <button 
-                      onClick={() => deleteTask(task.id)}
-                      className="text-white/20 hover:text-red-400 transition-colors p-2 rounded-lg"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                      {/* Focus Mode Button */}
+
+                      {!task.is_completed && (
+                        <button
+                          onClick={() => setFocusTask(task)}
+                          className="text-cyan-400 hover:text-cyan-300 transition-colors p-2 rounded-lg bg-cyan-400/10 hover:bg-cyan-400/20"
+                          title="Enter Matrix Focus Mode">
+                          <Zap className="w-5 h-5" />
+                          </button>
+                      )}
+
+                      {/* Delete Task Button */}
+                      <button 
+                        onClick={() => deleteTask(task.id)}
+                        className="text-white/20 hover:text-red-400 transition-colors p-2 rounded-lg"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -392,7 +409,16 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <Analytics />
+
+      {/* Matrix Focus Mode Overlay */}
+      <AnimatePresence>
+        {focusTask && (
+          <focusmode
+            task={focusTask}
+            onclose={() => setFocusTask(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
