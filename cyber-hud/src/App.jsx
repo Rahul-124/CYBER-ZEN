@@ -7,7 +7,6 @@ import FocusMode from './FocusMode';
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'reset_request' | 'reset_confirm'
-  const [focusTask, setFocusTask] = usestate(null);
 
   // Form Fields
   const [username, setUsername] = useState('');
@@ -22,6 +21,7 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
+  const [focusTask, setFocusTask] = useState(null);
   const [calendarData, setCalendarData] = useState({ 
     tithi: 'Scanning Cosmos...', 
     energy_status: 'Calculating...' 
@@ -377,18 +377,15 @@ export default function App() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-
-                    
+                    <div className="flex items-center gap-2">                  
                       {/* Focus Mode Button */}
-
                       {!task.is_completed && (
                         <button
                           onClick={() => setFocusTask(task)}
                           className="text-cyan-400 hover:text-cyan-300 transition-colors p-2 rounded-lg bg-cyan-400/10 hover:bg-cyan-400/20"
                           title="Enter Matrix Focus Mode">
                           <Zap className="w-5 h-5" />
-                          </button>
+                        </button>
                       )}
 
                       {/* Delete Task Button */}
