@@ -7,7 +7,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 
-Cyber-Zen is a full-stack, sci-fi-inspired productivity web application deployed on cloud architecture. It bridges a high-performance React frontend with a robust Python/Django backend, featuring a live PostgreSQL database and real-time astronomical calculations.
+Cyber-Zen is a full-stack, sci-fi-inspired productivity web application deployed on a cloud architecture. It bridges a high-performance React frontend with a robust Python/Django backend, featuring a live PostgreSQL database and real-time astronomical calculations.
 
 ## 🚀 Technical Architecture
 * **Frontend (Vercel):** Built with React, Vite, and Tailwind CSS. Features advanced state management and Framer Motion for a fluid, cybernetic UI.
@@ -19,7 +19,7 @@ Cyber-Zen is a full-stack, sci-fi-inspired productivity web application deployed
 ## ⚙️ Local Installation
 ```bash
 # Clone the repository
-git clone [https://github.com/YourUsername/cyber-zen.git](https://github.com/YourUsername/cyber-zen.git)
+git clone [https://github.com/Rahul-124/CYBER-ZEN.git]
 
 # Set up the Python Core
 cd quantum_core
