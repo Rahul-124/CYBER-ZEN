@@ -161,3 +161,24 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL','http://localhost:5173')  # Your Re
 
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# ==========================================
+# STATIC FILES (CSS/JS) FOR RENDER
+# ==========================================
+# This tells Django to compress and cache static files for lightning-fast loading
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# ==========================================
+# SECURITY: JWT TOKEN LIFECYCLE
+# ==========================================
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15), # Short for security (interceptor refreshes it)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),   # Long for UX (user stays logged in for a month)
+    'ROTATE_REFRESH_TOKENS': True,                  # Gives a new refresh token every time they visit
+    'BLACKLIST_AFTER_ROTATION': True,
+}
