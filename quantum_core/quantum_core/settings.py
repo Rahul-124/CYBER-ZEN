@@ -138,7 +138,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = [
-    "https://localhost:5173",
+    "http://localhost:5173",
     "https://cyber-zen-nine.vercel.app",
 ]
 
@@ -154,13 +154,10 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-
-# Enter your actual Gmail address here
 EMAIL_HOST_USER = 'devroy12032015@gmail.com' 
 
-# Enter the 16-letter App Password you generated (No spaces)
-EMAIL_HOST_PASSWORD = 'your_password_here' # Replace with your actual App Password
-FRONTEND_URL = 'http://localhost:5173'  # Your React app dev URL
+
+FRONTEND_URL = os.environ.get('FRONTEND_URL','http://localhost:5173')  # Your React app dev URL
 
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
