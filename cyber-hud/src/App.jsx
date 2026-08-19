@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft, Zap } from 'lucide-react';
+// NEW: Imported Eye and EyeOff icons
+import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft, Zap, Eye, EyeOff } from 'lucide-react';
+// NEW: Imported our custom enterprise API service instead of raw axios
+import api from './services/api'; 
 import FocusMode from './components/FocusMode';
 
 export default function App() {
@@ -14,6 +17,9 @@ export default function App() {
   const [resetUid, setResetUid] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  
+  // NEW: State to track if the password should be visible
+  const [showPassword, setShowPassword] = useState(false);
 
   // Status & App Data
   const [error, setError] = useState('');
@@ -31,7 +37,7 @@ export default function App() {
     const token = localStorage.getItem('access_token');
     if (token) {
       setIsAuthenticated(true);
-      fetchTasks(token);
+      fetchTasks();
     }
   }, []);
 
@@ -40,16 +46,13 @@ export default function App() {
     setMessage('');
   };
 
-  const fetchTasks = async (token) => {
+  // REFACTORED: We no longer need to pass tokens manually. api.js handles it!
+  const fetchTasks = async () => {
     try {
-      const taskRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/tasks/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const taskRes = await api.get('/api/tasks/');
       setTasks(taskRes.data);
 
-      const calRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/calendar/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const calRes = await api.get('/api/calendar/');
       setCalendarData(calRes.data);
     } catch (err) {
       console.error("Session error:", err);
@@ -61,11 +64,11 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/token/`, { username, password });
+      const res = await api.post('/api/token/', { username, password });
       localStorage.setItem('access_token', res.data.access);
       localStorage.setItem('refresh_token', res.data.refresh);
       setIsAuthenticated(true);
-      fetchTasks(res.data.access);
+      fetchTasks();
     } catch (err) {
       setError('Invalid Quantum Credentials');
     }
@@ -75,7 +78,7 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/register/`, { username, email, password });
+      await api.post('/api/register/', { username, email, password });
       setMessage('Identity created! Authenticating...');
       setTimeout(() => handleLogin(e), 1000);
     } catch (err) {
@@ -87,7 +90,7 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/password-reset/`, { email });
+      const res = await api.post('/api/password-reset/', { email });
       setMessage(res.data.message);
       if (res.data.uid) setResetUid(res.data.uid);
       setAuthMode('reset_confirm');
@@ -100,7 +103,7 @@ export default function App() {
     e.preventDefault();
     clearFeedback();
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/password-reset/confirm/`, {
+      const res = await api.post('/api/password-reset/confirm/', {
         uid: resetUid,
         token: resetToken,
         new_password: newPassword
@@ -125,12 +128,8 @@ export default function App() {
   const addTask = async (e) => {
     e.preventDefault();
     if (!newTask.trim()) return;
-    const token = localStorage.getItem('access_token');
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/tasks/`, 
-        { title: newTask, is_completed: false },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await api.post('/api/tasks/', { title: newTask, is_completed: false });
       setTasks([res.data, ...tasks]);
       setNewTask('');
     } catch (err) {
@@ -139,12 +138,8 @@ export default function App() {
   };
 
   const toggleTask = async (id, currentStatus) => {
-    const token = localStorage.getItem('access_token');
     try {
-      const res = await axios.patch(`${import.meta.env.VITE_API_URL}/api/tasks/${id}/`, 
-        { is_completed: !currentStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await api.patch(`/api/tasks/${id}/`, { is_completed: !currentStatus });
       setTasks(tasks.map(t => t.id === id ? res.data : t));
     } catch (err) {
       console.error(err);
@@ -152,11 +147,8 @@ export default function App() {
   };
 
   const deleteTask = async (id) => {
-    const token = localStorage.getItem('access_token');
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/tasks/${id}/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/api/tasks/${id}/`);
       setTasks(tasks.filter(t => t.id !== id));
     } catch (err) {
       console.error(err);
@@ -193,15 +185,27 @@ export default function App() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-cyan-400/50"
                     required
                   />
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-cyan-400/50"
-                    required
-                  />
-                  <button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 text-slate-950 font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                  
+                  {/* REFACTORED PASSWORD INPUT WITH TOGGLE */}
+                  <div className="relative w-full">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-cyan-400/50 pr-12"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-cyan-400 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+
+                  <button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 text-slate-950 font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:scale-[1.02] transition-transform">
                     INITIALIZE LINK
                   </button>
                   <div className="flex justify-between text-xs text-white/50 pt-2">
@@ -234,15 +238,27 @@ export default function App() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
                     required
                   />
-                  <input
-                    type="password"
-                    placeholder="Password (letters + numbers)"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
-                    required
-                  />
-                  <button type="submit" className="w-full bg-gradient-to-r from-purple-500 to-cyan-500 text-slate-950 font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(168,85,247,0.4)]">
+                  
+                  {/* REFACTORED PASSWORD INPUT WITH TOGGLE */}
+                  <div className="relative w-full">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password (letters + numbers)"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50 pr-12"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-purple-400 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+
+                  <button type="submit" className="w-full bg-gradient-to-r from-purple-500 to-cyan-500 text-slate-950 font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:scale-[1.02] transition-transform">
                     REGISTER CORE NODE
                   </button>
                   <button type="button" onClick={() => { setAuthMode('login'); clearFeedback(); }} className="w-full flex items-center justify-center gap-2 text-xs text-white/50 hover:text-cyan-400 pt-2">
@@ -266,7 +282,7 @@ export default function App() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-cyan-400/50"
                     required
                   />
-                  <button type="submit" className="w-full bg-cyan-500 text-slate-950 font-bold py-3 rounded-xl">
+                  <button type="submit" className="w-full bg-cyan-500 text-slate-950 font-bold py-3 rounded-xl hover:bg-cyan-400 transition-colors">
                     DISPATCH TOKEN
                   </button>
                   <button type="button" onClick={() => { setAuthMode('login'); clearFeedback(); }} className="w-full flex items-center justify-center gap-2 text-xs text-white/50 hover:text-cyan-400 pt-2">
@@ -298,15 +314,27 @@ export default function App() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
                     required
                   />
-                  <input
-                    type="password"
-                    placeholder="New Password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
-                    required
-                  />
-                  <button type="submit" className="w-full bg-purple-500 text-slate-950 font-bold py-3 rounded-xl">
+                  
+                  {/* REFACTORED PASSWORD INPUT WITH TOGGLE */}
+                  <div className="relative w-full">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="New Password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50 pr-12"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-purple-400 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+
+                  <button type="submit" className="w-full bg-purple-500 text-slate-950 font-bold py-3 rounded-xl hover:bg-purple-400 transition-colors">
                     CONFIRM NEW PASSWORD
                   </button>
                 </form>
@@ -404,7 +432,7 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-
+      {/* MATRIX FOCUS TIMER */}
       <AnimatePresence>
         {focusTask && (
           <FocusMode 
