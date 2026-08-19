@@ -4,6 +4,7 @@ from rest_framework import viewsets, status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -12,6 +13,15 @@ from django.core.mail import send_mail
 
 from .models import Task
 from .serializers import TaskSerializer, RegisterSerializer
+
+
+# ENTERPRISE STANDARD: Limit this endpoint to 5 requests per minute per IP.
+# If someone exceeds this, Django automatically blocks them.
+@api_view(['GET', 'POST'])
+@ratelimit(key='ip', rate='5/m', block=True)
+def task_list(request):
+    # Your existing task logic goes here
+    return Response({"status": "Active tasks retrieved."})
 
 
 # ==========================================

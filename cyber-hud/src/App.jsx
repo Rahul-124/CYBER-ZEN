@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft, Zap } from 'lucide-react';
 import axios from 'axios';
-import FocusMode from './FocusMode';
+import FocusMode from './components/FocusMode';
 
 // --- AXIOS INTERCEPTOR: SILENT TOKEN REFRESH ENGINE ---
 axios.interceptors.response.use(

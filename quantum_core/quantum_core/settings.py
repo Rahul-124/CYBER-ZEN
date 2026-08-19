@@ -182,3 +182,26 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,                  # Gives a new refresh token every time they visit
     'BLACKLIST_AFTER_ROTATION': True,
 }
+
+# ==========================================
+# ENTERPRISE CACHING & MEMORY (REDIS)
+# ==========================================
+# In production, this URL will come from your .env file.
+# For local development, we use the default Redis port.
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1')
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            # Ignore Redis connection errors so the app doesn't crash if Redis goes down
+            "IGNORE_EXCEPTIONS": True, 
+        }
+    }
+}
+
+# Use Redis to store user session data (faster than querying PostgreSQL)
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
