@@ -1,47 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft, Zap } from 'lucide-react';
-import axios from 'axios';
 import FocusMode from './components/FocusMode';
-
-// --- AXIOS INTERCEPTOR: SILENT TOKEN REFRESH ENGINE ---
-axios.interceptors.response.use(
-  (response) => response, // If the request is successful, pass it through
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // If Django throws a 401 (Expired Token) AND we haven't tried refreshing yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; // Mark that we are trying a refresh
-      
-      try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        
-        // Ask Django for a new access token
-        const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/token/refresh/`, {
-          refresh: refreshToken
-        });
-        
-        // Save the new token
-        localStorage.setItem('access_token', res.data.access);
-        
-        // Update the failed request with the new token and try again!
-        originalRequest.headers['Authorization'] = `Bearer ${res.data.access}`;
-        return axios(originalRequest);
-        
-      } catch (refreshError) {
-        // If the refresh token is also expired, log the user out completely
-        console.error("Refresh token expired. Logging out.");
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.reload(); 
-        return Promise.reject(refreshError);
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-// --- END INTERCEPTOR ---
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
