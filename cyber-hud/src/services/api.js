@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Create a dedicated, configured instance of Axios
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   headers: {
@@ -8,7 +7,7 @@ const api = axios.create({
   },
 });
 
-// Request Interceptor: Automatically attach the JWT token to every request
+// Request Interceptor: Attach token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
@@ -17,12 +16,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response Interceptor: Silent Token Refresh Engine
+// Response Interceptor: Silent Refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    
+
+    if (
+      error.response?.status === 401 && 
+      !originalRequest._retry &&
+      !originalRequest.url.includes('/api/token/') 
+    ) {
       originalRequest._retry = true;
       try {
         const refreshToken = localStorage.getItem('refresh_token');
