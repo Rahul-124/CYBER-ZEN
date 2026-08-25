@@ -1,446 +1,106 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-// NEW: Imported Eye and EyeOff icons
-import { Trash2, CheckCircle, Circle, Lock, UserPlus, KeyRound, ArrowLeft, Zap, Eye, EyeOff } from 'lucide-react';
-// NEW: Imported our custom enterprise API service instead of raw axios
-import api from './services/api'; 
+import { useCallback, useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowLeft, Calendar, CheckCircle, Circle, Eye, EyeOff, KeyRound, Lock, LogOut, Plus, Trash2, UserPlus, Zap } from 'lucide-react';
+import api from './services/api';
 import FocusMode from './components/FocusMode';
 
-export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); 
+const initialCalendar = { date: '', tithi: 'Scanning cosmos…', nakshatra: 'Calibrating…', dosha: 'Calibrating…', energy_status: 'Calculating…', holiday: null, upcoming_holidays: [] };
+const todayIso = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+const priorityStyle = { high: 'border-fuchsia-400/50 bg-fuchsia-500/15 text-fuchsia-200', medium: 'border-amber-400/50 bg-amber-500/15 text-amber-200', low: 'border-cyan-400/50 bg-cyan-500/15 text-cyan-200' };
 
-  // Form Fields
+function ParticleBurst({ origin }) {
+  if (!origin) return null;
+  return <div className="pointer-events-none fixed inset-0 z-[120] overflow-hidden">{Array.from({ length: 14 }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / 14;
+    const distance = 45 + (index % 5) * 20;
+    return <motion.span key={`${origin.id}-${index}`} initial={{ left: origin.x, top: origin.y, opacity: 1, scale: 1 }} animate={{ left: origin.x + Math.cos(angle) * distance, top: origin.y + Math.sin(angle) * distance, opacity: 0, scale: 0 }} transition={{ duration: 0.65, delay: index * 0.025, ease: 'easeOut' }} className="absolute h-2 w-2 rounded-full bg-gradient-to-r from-cyan-300 to-fuchsia-400 shadow-[0_0_12px_rgba(34,211,238,.9)]" />;
+  })}</div>;
+}
+
+function ProgressRing({ complete, total }) {
+  const percentage = total ? Math.round((complete / total) * 100) : 0;
+  const circumference = 2 * Math.PI * 45;
+  return <div className="relative mx-auto h-40 w-40"><svg viewBox="0 0 100 100" className="h-full w-full -rotate-90"><defs><linearGradient id="sync-progress" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#22d3ee" /><stop offset="100%" stopColor="#e879f9" /></linearGradient></defs><circle cx="50" cy="50" r="45" fill="none" stroke="rgba(34,211,238,.12)" strokeWidth="3" /><motion.circle cx="50" cy="50" r="45" fill="none" stroke="url(#sync-progress)" strokeWidth="4" strokeLinecap="round" strokeDasharray={circumference} animate={{ strokeDashoffset: circumference * (1 - percentage / 100) }} transition={{ duration: 0.65, ease: 'easeOut' }} /></svg><div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-3xl font-bold text-cyan-100">{percentage}%</span><span className="mt-1 text-xs text-cyan-200/55">{complete}/{total} complete</span></div></div>;
+}
+
+function AuthShell({ children }) {
+  return <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020611] px-4 py-10 text-cyan-50"><motion.div animate={{ backgroundPosition: ['0% 0%', '100% 100%'] }} transition={{ duration: 24, repeat: Infinity, ease: 'linear' }} className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(45deg, rgba(34,211,238,.35) 1px, transparent 1px)', backgroundSize: '48px 48px' }} /><div className="pointer-events-none absolute -left-36 top-8 h-96 w-96 rounded-full bg-cyan-500/15 blur-3xl" /><div className="pointer-events-none absolute -bottom-40 -right-20 h-96 w-96 rounded-full bg-fuchsia-500/15 blur-3xl" />{children}</div>;
+}
+
+function AuthForm({ onAuthenticated }) {
+  const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [resetUid, setResetUid] = useState('');
   const [resetToken, setResetToken] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  
-  // NEW: State to track if the password should be visible
   const [showPassword, setShowPassword] = useState(false);
-
-  // Status & App Data
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const clearFeedback = () => { setError(''); setMessage(''); };
+  const inputClass = 'w-full rounded-xl border border-cyan-300/20 bg-black/40 px-4 py-3 text-cyan-50 placeholder:text-cyan-100/30 outline-none transition focus:border-cyan-300/70';
+  const passwordInput = (value, setter, placeholder) => <div className="relative"><input type={showPassword ? 'text' : 'password'} value={value} onChange={(event) => setter(event.target.value)} placeholder={placeholder} className={`${inputClass} pr-12`} required /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-100/40 hover:text-cyan-200">{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div>;
+  const login = async (event) => { event.preventDefault(); clearFeedback(); try { const response = await api.post('/api/token/', { username, password }); localStorage.setItem('access_token', response.data.access); localStorage.setItem('refresh_token', response.data.refresh); setScanning(true); setTimeout(onAuthenticated, 1050); } catch { setError('Invalid Quantum Credentials'); } };
+  const register = async (event) => { event.preventDefault(); clearFeedback(); try { await api.post('/api/register/', { username, email, password }); setMessage('Identity created. Authenticate to initialize your sync.'); setMode('login'); } catch (requestError) { setError(requestError.response?.data?.username?.[0] || 'Registration failed. Check password strength.'); } };
+  const requestReset = async (event) => { event.preventDefault(); clearFeedback(); try { const response = await api.post('/api/password-reset/', { email }); setMessage(response.data.message); setResetUid(response.data.uid || ''); setMode('reset_confirm'); } catch { setError('Unable to dispatch a recovery token.'); } };
+  const confirmReset = async (event) => { event.preventDefault(); clearFeedback(); try { const response = await api.post('/api/password-reset/confirm/', { uid: resetUid, token: resetToken, new_password: newPassword }); setMessage(response.data.message); setMode('login'); } catch (requestError) { setError(requestError.response?.data?.error || 'Password reset failed.'); } };
+  const backToLogin = () => { clearFeedback(); setMode('login'); };
+  if (scanning) return <AuthShell><motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10 w-full max-w-md rounded-3xl border border-cyan-300/25 bg-black/45 p-10 text-center backdrop-blur-xl"><motion.div animate={{ rotate: 360 }} transition={{ duration: 1.7, repeat: Infinity, ease: 'linear' }} className="mx-auto h-32 w-32 rounded-full border-2 border-transparent border-r-fuchsia-400 border-t-cyan-300" /><div className="relative -mt-[74px] mx-auto h-4 w-4 rounded-full bg-cyan-300 shadow-[0_0_22px_rgba(34,211,238,1)]" /><p className="mt-16 text-sm tracking-[.25em] text-cyan-200">BIOMETRIC SYNC IN PROGRESS…</p></motion.div></AuthShell>;
+  return <AuthShell><motion.div key={mode} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 w-full max-w-md rounded-3xl border border-cyan-300/20 bg-black/45 p-8 shadow-[0_0_45px_rgba(34,211,238,.16)] backdrop-blur-xl"><div className="mb-7 text-center"><motion.div animate={{ y: [0, -4, 0] }} transition={{ duration: 2.5, repeat: Infinity }} className="text-3xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300">CYBER_ZEN</motion.div><p className="mt-2 text-xs tracking-[.22em] text-cyan-200/60">QUANTUM LIFE TRACKER</p></div>
+    {mode === 'login' && <form onSubmit={login} className="space-y-4"><div className="flex items-center justify-center gap-2 text-cyan-300"><Lock size={20} /><h1 className="text-sm tracking-[.2em]">IDENTITY AUTH</h1></div><input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" className={inputClass} required />{passwordInput(password, setPassword, 'Password')}<button className="w-full rounded-xl bg-gradient-to-r from-cyan-400 to-fuchsia-500 py-3 font-bold text-slate-950 transition hover:brightness-110">INITIALIZE QUANTUM SYNC</button><div className="flex justify-between text-xs text-cyan-100/55"><button type="button" onClick={() => { clearFeedback(); setMode('register'); }} className="hover:text-cyan-200">Create Identity</button><button type="button" onClick={() => { clearFeedback(); setMode('reset_request'); }} className="hover:text-fuchsia-200">Forgot Password?</button></div></form>}
+    {mode === 'register' && <form onSubmit={register} className="space-y-4"><div className="flex items-center justify-center gap-2 text-fuchsia-300"><UserPlus size={20} /><h1 className="text-sm tracking-[.2em]">NEW IDENTITY</h1></div><input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" className={inputClass} required /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className={inputClass} required />{passwordInput(password, setPassword, 'Password (letters + numbers)')}<button className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-cyan-400 py-3 font-bold text-slate-950">REGISTER CORE NODE</button><button type="button" onClick={backToLogin} className="flex w-full items-center justify-center gap-2 pt-1 text-xs text-cyan-100/55 hover:text-cyan-200"><ArrowLeft size={14} /> Back to Auth</button></form>}
+    {mode === 'reset_request' && <form onSubmit={requestReset} className="space-y-4"><div className="flex items-center justify-center gap-2 text-cyan-300"><KeyRound size={20} /><h1 className="text-sm tracking-[.2em]">RECOVER IDENTITY</h1></div><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Registered email" className={inputClass} required /><button className="w-full rounded-xl bg-cyan-400 py-3 font-bold text-slate-950">DISPATCH TOKEN</button><button type="button" onClick={backToLogin} className="flex w-full items-center justify-center gap-2 pt-1 text-xs text-cyan-100/55 hover:text-cyan-200"><ArrowLeft size={14} /> Back to Auth</button></form>}
+    {mode === 'reset_confirm' && <form onSubmit={confirmReset} className="space-y-4"><div className="flex items-center justify-center gap-2 text-fuchsia-300"><KeyRound size={20} /><h1 className="text-sm tracking-[.2em]">ENTER RESET TOKEN</h1></div><input value={resetUid} onChange={(event) => setResetUid(event.target.value)} placeholder="UID" className={inputClass} required /><input value={resetToken} onChange={(event) => setResetToken(event.target.value)} placeholder="Token" className={inputClass} required />{passwordInput(newPassword, setNewPassword, 'New password')}<button className="w-full rounded-xl bg-fuchsia-400 py-3 font-bold text-slate-950">CONFIRM NEW PASSWORD</button><button type="button" onClick={backToLogin} className="flex w-full items-center justify-center gap-2 pt-1 text-xs text-cyan-100/55 hover:text-cyan-200"><ArrowLeft size={14} /> Back to Auth</button></form>}
+    {error && <p className="mt-4 text-center text-xs text-red-300">{error}</p>}{message && <p className="mt-4 text-center text-xs text-cyan-200">{message}</p>}</motion.div></AuthShell>;
+}
+
+function Dashboard({ onLogout }) {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
-  const [focusTask, setFocusTask] = useState(null); 
-  
-  const [calendarData, setCalendarData] = useState({ 
-    tithi: 'Scanning Cosmos...', 
-    energy_status: 'Calculating...' 
-  });
-
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      setIsAuthenticated(true);
-      fetchTasks();
-    }
+  const [priority, setPriority] = useState('medium');
+  const [focusTask, setFocusTask] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(todayIso());
+  const [calendarData, setCalendarData] = useState(initialCalendar);
+  const [burst, setBurst] = useState(null);
+  const [notice, setNotice] = useState('');
+  const fetchTasks = useCallback(async () => {
+    const response = await api.get('/api/tasks/');
+    setTasks(Array.isArray(response.data) ? response.data : []);
   }, []);
+  const fetchCalendar = useCallback(async (date) => {
+    const response = await api.get('/api/calendar/', { params: { date } });
+    setCalendarData({
+      ...initialCalendar,
+      ...response.data,
+      upcoming_holidays: Array.isArray(response.data?.upcoming_holidays) ? response.data.upcoming_holidays : [],
+    });
+  }, []);
+  useEffect(() => {
+    const synchronize = window.setTimeout(() => {
+      Promise.all([fetchTasks(), fetchCalendar(selectedDate)]).catch(() => setNotice('Unable to synchronize your dashboard. Please reconnect.'));
+    }, 0);
+    return () => window.clearTimeout(synchronize);
+  }, [fetchCalendar, fetchTasks, selectedDate]);
+  const addTask = async (event) => { event.preventDefault(); const title = newTask.trim(); if (!title) return; try { const response = await api.post('/api/tasks/', { title, priority, is_completed: false }); setTasks((current) => [response.data, ...current]); setNewTask(''); } catch { setNotice('Task sync failed. Try again.'); } };
+  const toggleTask = async (task) => { try { const response = await api.patch(`/api/tasks/${task.id}/`, { is_completed: !task.is_completed }); setTasks((current) => current.map((item) => item.id === task.id ? response.data : item)); } catch { setNotice('Could not update task status.'); } };
+  const deleteTask = async (task, event) => { event.stopPropagation(); const origin = { id: task.id, x: event.clientX, y: event.clientY }; setBurst(origin); try { await api.delete(`/api/tasks/${task.id}/`); window.setTimeout(() => setTasks((current) => current.filter((item) => item.id !== task.id)), 280); } catch { setNotice('Could not remove the task.'); } finally { window.setTimeout(() => setBurst(null), 750); } };
+  const completed = tasks.filter((task) => task.is_completed).length;
+  const formattedDate = selectedDate ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
+  return <div className="min-h-screen overflow-hidden bg-[#020611] text-cyan-50"><div className="pointer-events-none fixed inset-0 opacity-30" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(34,211,238,.035) 0px, rgba(34,211,238,.035) 1px, transparent 1px, transparent 4px)' }} /><div className="pointer-events-none fixed -right-40 top-12 h-[30rem] w-[30rem] rounded-full bg-fuchsia-500/10 blur-3xl" /><div className="pointer-events-none fixed -bottom-48 -left-20 h-[30rem] w-[30rem] rounded-full bg-cyan-500/10 blur-3xl" /><ParticleBurst origin={burst} />
+    <header className="relative z-10 border-b border-cyan-300/15 bg-black/25 backdrop-blur-md"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8"><div><h1 className="text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-fuchsia-400">CYBER_ZEN</h1><p className="mt-1 text-[10px] tracking-[.25em] text-cyan-100/50">QUANTUM LIFE TRACKER</p></div><div className="flex items-center gap-4"><div className="hidden text-right sm:block"><p className="text-xs text-cyan-200">{calendarData.tithi}</p><p className="text-[10px] tracking-wider text-cyan-100/45">ENERGY: {calendarData.energy_status}</p></div><button onClick={onLogout} className="flex items-center gap-2 rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-2 text-xs text-fuchsia-200 transition hover:bg-fuchsia-500/20"><LogOut size={15} /> DISCONNECT</button></div></div></header>
+    <main className="relative z-10 mx-auto grid max-w-7xl gap-6 px-5 py-8 md:px-8 lg:grid-cols-3"><section className="space-y-5 lg:col-span-2"><motion.form initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} onSubmit={addTask} className="rounded-2xl border border-cyan-300/30 bg-white/[.045] p-4 shadow-[0_0_30px_rgba(34,211,238,.1)] backdrop-blur-xl md:p-6"><label htmlFor="new-task" className="mb-3 flex items-center gap-2 text-xs tracking-[.18em] text-cyan-200"><Plus size={17} /> CRYSTALLIZE YOUR INTENTION</label><div className="flex flex-col gap-3 sm:flex-row"><input id="new-task" value={newTask} onChange={(event) => setNewTask(event.target.value)} placeholder="Add an objective…" className="min-w-0 flex-1 rounded-xl border border-cyan-300/20 bg-black/35 px-4 py-3 outline-none transition placeholder:text-cyan-100/30 focus:border-cyan-300/60" /><select value={priority} onChange={(event) => setPriority(event.target.value)} className="rounded-xl border border-cyan-300/20 bg-slate-950 px-3 py-3 text-sm text-cyan-100 outline-none focus:border-cyan-300/60"><option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option></select><button className="rounded-xl bg-gradient-to-r from-cyan-400 to-fuchsia-500 px-6 py-3 text-sm font-bold text-slate-950 transition hover:brightness-110">SYNC</button></div></motion.form>
+      <div><div className="mb-3 flex items-center justify-between"><h2 className="text-xs tracking-[.2em] text-cyan-200">NEURAL TASKS ({tasks.length})</h2><span className="text-xs text-cyan-100/45">{completed} synchronized</span></div><AnimatePresence initial={false}>{tasks.map((task) => <motion.article key={task.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 80, filter: 'blur(7px)' }} className={`group mb-3 flex items-center gap-3 rounded-xl border p-4 transition ${task.is_completed ? 'border-cyan-300/15 bg-cyan-500/[.06] opacity-60' : 'border-cyan-300/25 bg-white/[.045] hover:border-cyan-300/55 hover:bg-white/[.07]'}`}><button onClick={() => toggleTask(task)} aria-label={task.is_completed ? 'Mark incomplete' : 'Mark complete'} className="shrink-0 text-cyan-300">{task.is_completed ? <CheckCircle size={23} /> : <Circle size={23} />}</button><button onClick={() => toggleTask(task)} className={`min-w-0 flex-1 text-left text-base ${task.is_completed ? 'text-cyan-100/60 line-through' : 'text-cyan-50'}`}>{task.title}</button><span className={`hidden rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider sm:inline ${priorityStyle[task.priority] || priorityStyle.medium}`}>{task.priority || 'medium'}</span>{!task.is_completed && <button onClick={() => setFocusTask(task)} title="Enter Focus Mode" className="rounded-lg bg-cyan-400/10 p-2 text-cyan-300 transition hover:bg-cyan-400/20"><Zap size={17} /></button>}<button onClick={(event) => deleteTask(task, event)} aria-label="Delete task" className="p-2 text-fuchsia-300/55 transition hover:text-fuchsia-200"><Trash2 size={17} /></button></motion.article>)}</AnimatePresence>{tasks.length === 0 && <p className="rounded-xl border border-dashed border-cyan-300/15 py-12 text-center text-sm text-cyan-100/40">No tasks synchronized. The day awaits your intention.</p>}</div></section>
+      <aside className="space-y-5"><section className="rounded-2xl border border-cyan-300/25 bg-white/[.045] p-6 text-center backdrop-blur-xl"><h2 className="mb-5 text-xs tracking-[.2em] text-cyan-200">SYNCHRONIZATION STATUS</h2><ProgressRing complete={completed} total={tasks.length} /><p className="mt-4 text-xs text-cyan-100/55">Neural alignment {tasks.length && completed === tasks.length ? 'complete' : 'in progress'}</p></section><section className="rounded-2xl border border-cyan-300/25 bg-white/[.045] p-6 backdrop-blur-xl"><div className="mb-4 flex items-center gap-2 text-xs tracking-[.18em] text-cyan-200"><Calendar size={17} /> TEMPORAL ALIGNMENT</div><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="mb-4 w-full rounded-lg border border-cyan-300/20 bg-slate-950 px-3 py-2 text-sm text-cyan-100 outline-none focus:border-cyan-300/65" /><p className="mb-4 text-sm font-semibold leading-6 text-cyan-50">{formattedDate}</p>{calendarData.holiday && <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-400/10 p-3 text-left"><p className="text-sm font-semibold text-amber-100">{calendarData.holiday.name}</p><p className="mt-1 text-[10px] tracking-wider text-amber-200/65">FESTIVAL DAY</p></div>}<div className="space-y-2 text-left">{[['TITHI · Lunar day', calendarData.tithi, 'border-cyan-300/20'], ['NAKSHATRA · Star', calendarData.nakshatra, 'border-fuchsia-300/20'], ['DOSHA · Constitution', calendarData.dosha, 'border-amber-300/20']].map(([label, value, border]) => <div key={label} className={`rounded-lg border ${border} bg-black/20 p-3`}><p className="text-[10px] tracking-wider text-cyan-100/45">{label}</p><p className="mt-1 text-sm text-cyan-50">{value}</p></div>)}</div></section><section className="rounded-2xl border border-cyan-300/25 bg-white/[.045] p-6 backdrop-blur-xl"><h2 className="mb-3 text-xs tracking-[.18em] text-cyan-200">COSMIC CALENDAR</h2><div className="space-y-2">{calendarData.upcoming_holidays.map((holiday) => <div key={`${holiday.date}-${holiday.name}`} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition hover:bg-white/[.05]"><div><p className="text-sm text-cyan-50">{holiday.name}</p><p className="text-[10px] text-cyan-100/45">{new Date(`${holiday.date}T12:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p></div><span className="text-xs text-amber-200">◈</span></div>)}{calendarData.upcoming_holidays.length === 0 && <p className="py-2 text-xs text-cyan-100/45">No upcoming holiday signals.</p>}</div></section></aside></main>
+    {notice && <button onClick={() => setNotice('')} className="fixed bottom-5 right-5 z-50 rounded-xl border border-amber-300/40 bg-slate-950 px-4 py-3 text-xs text-amber-100 shadow-xl">{notice}</button>}<AnimatePresence>{focusTask && <FocusMode task={focusTask} onClose={() => setFocusTask(null)} />}</AnimatePresence></div>;
+}
 
-  const clearFeedback = () => {
-    setError('');
-    setMessage('');
-  };
-
-  // REFACTORED: We no longer need to pass tokens manually. api.js handles it!
-  const fetchTasks = async () => {
-    try {
-      const taskRes = await api.get('/api/tasks/');
-      setTasks(taskRes.data);
-
-      const calRes = await api.get('/api/calendar/');
-      setCalendarData(calRes.data);
-    } catch (err) {
-      console.error("Session error:", err);
-      handleLogout();
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    clearFeedback();
-    try {
-      const res = await api.post('/api/token/', { username, password });
-      localStorage.setItem('access_token', res.data.access);
-      localStorage.setItem('refresh_token', res.data.refresh);
-      setIsAuthenticated(true);
-      fetchTasks();
-    } catch (err) {
-      setError('Invalid Quantum Credentials');
-    }
-  };
-
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    clearFeedback();
-    try {
-      await api.post('/api/register/', { username, email, password });
-      setMessage('Identity created! Authenticating...');
-      setTimeout(() => handleLogin(e), 1000);
-    } catch (err) {
-      setError(err.response?.data?.username?.[0] || 'Registration failed. Check password strength.');
-    }
-  };
-
-  const handleRequestReset = async (e) => {
-    e.preventDefault();
-    clearFeedback();
-    try {
-      const res = await api.post('/api/password-reset/', { email });
-      setMessage(res.data.message);
-      if (res.data.uid) setResetUid(res.data.uid);
-      setAuthMode('reset_confirm');
-    } catch (err) {
-      setError('Error dispatching token.');
-    }
-  };
-
-  const handleConfirmReset = async (e) => {
-    e.preventDefault();
-    clearFeedback();
-    try {
-      const res = await api.post('/api/password-reset/confirm/', {
-        uid: resetUid,
-        token: resetToken,
-        new_password: newPassword
-      });
-      setMessage(res.data.message);
-      setTimeout(() => {
-        setAuthMode('login');
-        clearFeedback();
-      }, 2000);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Password reset failed.');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    setIsAuthenticated(false);
-    setTasks([]);
-  };
-
-  const addTask = async (e) => {
-    e.preventDefault();
-    if (!newTask.trim()) return;
-    try {
-      const res = await api.post('/api/tasks/', { title: newTask, is_completed: false });
-      setTasks([res.data, ...tasks]);
-      setNewTask('');
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const toggleTask = async (id, currentStatus) => {
-    try {
-      const res = await api.patch(`/api/tasks/${id}/`, { is_completed: !currentStatus });
-      setTasks(tasks.map(t => t.id === id ? res.data : t));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const deleteTask = async (id) => {
-    try {
-      await api.delete(`/api/tasks/${id}/`);
-      setTasks(tasks.filter(t => t.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  return (
-    <>
-      <div className="min-h-screen bg-slate-950 text-cyan-50 font-sans p-8 flex justify-center items-start overflow-hidden relative">
-        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-cyan-600/20 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] pointer-events-none" />
-
-        <AnimatePresence mode="wait">
-          {!isAuthenticated ? (
-            <motion.div
-              key={authMode}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-[0_0_40px_rgba(6,182,212,0.15)] z-10 mt-12"
-            >
-              {/* LOGIN MODE */}
-              {authMode === 'login' && (
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="flex flex-col items-center mb-4">
-                    <Lock className="w-10 h-10 text-cyan-400 mb-2 animate-pulse" />
-                    <h2 className="text-2xl font-bold tracking-widest text-cyan-400">IDENTITY AUTH</h2>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-cyan-400/50"
-                    required
-                  />
-                  
-                  {/* REFACTORED PASSWORD INPUT WITH TOGGLE */}
-                  <div className="relative w-full">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-cyan-400/50 pr-12"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-cyan-400 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-
-                  <button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 text-slate-950 font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:scale-[1.02] transition-transform">
-                    INITIALIZE LINK
-                  </button>
-                  <div className="flex justify-between text-xs text-white/50 pt-2">
-                    <button type="button" onClick={() => { setAuthMode('register'); clearFeedback(); }} className="hover:text-cyan-400">Create Identity</button>
-                    <button type="button" onClick={() => { setAuthMode('reset_request'); clearFeedback(); }} className="hover:text-purple-400">Forgot Password?</button>
-                  </div>
-                </form>
-              )}
-
-              {/* REGISTER MODE */}
-              {authMode === 'register' && (
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="flex flex-col items-center mb-4">
-                    <UserPlus className="w-10 h-10 text-purple-400 mb-2" />
-                    <h2 className="text-2xl font-bold tracking-widest text-purple-400">NEW IDENTITY</h2>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
-                    required
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
-                    required
-                  />
-                  
-                  {/* REFACTORED PASSWORD INPUT WITH TOGGLE */}
-                  <div className="relative w-full">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Password (letters + numbers)"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50 pr-12"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-purple-400 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-
-                  <button type="submit" className="w-full bg-gradient-to-r from-purple-500 to-cyan-500 text-slate-950 font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:scale-[1.02] transition-transform">
-                    REGISTER CORE NODE
-                  </button>
-                  <button type="button" onClick={() => { setAuthMode('login'); clearFeedback(); }} className="w-full flex items-center justify-center gap-2 text-xs text-white/50 hover:text-cyan-400 pt-2">
-                    <ArrowLeft className="w-3 h-3" /> Back to Auth
-                  </button>
-                </form>
-              )}
-
-              {/* RESET REQUEST MODE */}
-              {authMode === 'reset_request' && (
-                <form onSubmit={handleRequestReset} className="space-y-4">
-                  <div className="flex flex-col items-center mb-4">
-                    <KeyRound className="w-10 h-10 text-cyan-400 mb-2" />
-                    <h2 className="text-xl font-bold tracking-widest text-cyan-400">RECOVER IDENTITY</h2>
-                  </div>
-                  <input
-                    type="email"
-                    placeholder="Registered Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-cyan-400/50"
-                    required
-                  />
-                  <button type="submit" className="w-full bg-cyan-500 text-slate-950 font-bold py-3 rounded-xl hover:bg-cyan-400 transition-colors">
-                    DISPATCH TOKEN
-                  </button>
-                  <button type="button" onClick={() => { setAuthMode('login'); clearFeedback(); }} className="w-full flex items-center justify-center gap-2 text-xs text-white/50 hover:text-cyan-400 pt-2">
-                    <ArrowLeft className="w-3 h-3" /> Back to Auth
-                  </button>
-                </form>
-              )}
-
-              {/* RESET CONFIRM MODE */}
-              {authMode === 'reset_confirm' && (
-                <form onSubmit={handleConfirmReset} className="space-y-4">
-                  <div className="flex flex-col items-center mb-4">
-                    <KeyRound className="w-10 h-10 text-purple-400 mb-2" />
-                    <h2 className="text-xl font-bold tracking-widest text-purple-400">ENTER RESET TOKEN</h2>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="UID (Check Terminal)"
-                    value={resetUid}
-                    onChange={(e) => setResetUid(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Token (Check Terminal)"
-                    value={resetToken}
-                    onChange={(e) => setResetToken(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50"
-                    required
-                  />
-                  
-                  {/* REFACTORED PASSWORD INPUT WITH TOGGLE */}
-                  <div className="relative w-full">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="New Password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-cyan-50 focus:outline-none focus:border-purple-400/50 pr-12"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-purple-400 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-
-                  <button type="submit" className="w-full bg-purple-500 text-slate-950 font-bold py-3 rounded-xl hover:bg-purple-400 transition-colors">
-                    CONFIRM NEW PASSWORD
-                  </button>
-                </form>
-              )}
-
-              {error && <p className="text-red-400 text-xs text-center mt-4 font-semibold">{error}</p>}
-              {message && <p className="text-cyan-400 text-xs text-center mt-4 font-semibold">{message}</p>}
-            </motion.div>
-          ) : (
-            /* DASHBOARD HUD */
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="w-full max-w-2xl bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-[0_0_40px_rgba(8,_112,_184,_0.15)] z-10"
-            >
-              <header className="mb-8 flex justify-between items-center border-b border-white/10 pb-4">
-                <div>
-                  <h1 className="text-3xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
-                    CYBER-ZEN
-                  </h1>
-                  <button onClick={handleLogout} className="text-xs text-red-400/60 hover:text-red-400 underline transition-colors">
-                    Disconnect Core
-                  </button>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-cyan-200/70 uppercase tracking-widest">{calendarData.tithi}</p>
-                  <p className="text-xs text-white/40">Energy: {calendarData.energy_status}</p>
-                </div>
-              </header>
-
-              <form onSubmit={addTask} className="mb-8">
-                <input
-                  type="text"
-                  value={newTask}
-                  onChange={(e) => setNewTask(e.target.value)}
-                  placeholder="Initialize new objective..."
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-6 py-4 text-cyan-50 focus:outline-none focus:border-cyan-400/50 placeholder:text-white/20"
-                />
-              </form>
-
-              <div className="space-y-3">
-                <AnimatePresence>
-                  {tasks.map(task => (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -100, filter: "blur(10px)" }}
-                      whileHover={{ scale: 1.01, backgroundColor: "rgba(255,255,255,0.08)" }}
-                      className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
-                        task.is_completed 
-                          ? 'bg-white/5 border-white/5 text-white/30' 
-                          : 'bg-white/10 border-cyan-500/30 shadow-[0_0_15px_rgba(6,_182,_212,_0.05)]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4 cursor-pointer flex-1" onClick={() => toggleTask(task.id, task.is_completed)}>
-                        {task.is_completed ? (
-                          <CheckCircle className="text-purple-400 w-6 h-6 shrink-0" />
-                        ) : (
-                          <Circle className="text-cyan-400 w-6 h-6 shrink-0" />
-                        )}
-                        <span className={`text-lg transition-all ${task.is_completed ? 'line-through' : ''}`}>
-                          {task.title}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {!task.is_completed && (
-                          <button 
-                            onClick={() => setFocusTask(task)}
-                            className="text-cyan-400 hover:text-cyan-300 transition-colors p-2 rounded-lg bg-cyan-400/10 hover:bg-cyan-400/20"
-                            title="Enter Matrix Focus Mode"
-                          >
-                            <Zap className="w-5 h-5" />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => deleteTask(task.id)}
-                          className="text-white/20 hover:text-red-400 transition-colors p-2 rounded-lg"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                {tasks.length === 0 && (
-                  <p className="text-center text-white/20 py-8">No active matrix nodes. Add a task above.</p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* MATRIX FOCUS TIMER */}
-      <AnimatePresence>
-        {focusTask && (
-          <FocusMode 
-            task={focusTask} 
-            onClose={() => setFocusTask(null)} 
-          />
-        )}
-      </AnimatePresence>
-    </>
-  );
+export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(localStorage.getItem('access_token')));
+  const logout = () => { localStorage.removeItem('access_token'); localStorage.removeItem('refresh_token'); setIsAuthenticated(false); };
+  return <AnimatePresence mode="wait">{isAuthenticated ? <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><Dashboard onLogout={logout} /></motion.div> : <motion.div key="auth" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><AuthForm onAuthenticated={() => setIsAuthenticated(true)} /></motion.div>}</AnimatePresence>;
 }

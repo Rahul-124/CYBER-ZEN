@@ -1,5 +1,7 @@
 import math
 import ephem
+import holidays
+from datetime import date, timedelta
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -106,10 +108,11 @@ def confirm_password_reset(request):
 # ==========================================
 # 4. VEDIC CALENDAR ENGINE
 # ==========================================
-def calculate_tithi():
-    date = ephem.now()
-    sun = ephem.Sun(date)
-    moon = ephem.Moon(date)
+def calculate_calendar(target_date=None):
+    target_date = target_date or date.today()
+    observation_date = ephem.Date(target_date.strftime('%Y/%m/%d 12:00:00'))
+    sun = ephem.Sun(observation_date)
+    moon = ephem.Moon(observation_date)
     
     sun_lon = math.degrees(ephem.Ecliptic(sun).lon)
     moon_lon = math.degrees(ephem.Ecliptic(moon).lon)
@@ -129,12 +132,46 @@ def calculate_tithi():
         "Krishna Ekadashi", "Krishna Dwadashi", "Krishna Trayodashi", "Krishna Chaturdashi", "Amavasya (New Moon)"
     ]
     
-    return tithis[tithi_index]
+    nakshatras = [
+        'Ashwini', 'Bharani', 'Krittika', 'Rohini', 'Mrigashirsha', 'Ardra', 'Punarvasu',
+        'Pushya', 'Ashlesha', 'Magha', 'Purva Phalguni', 'Uttara Phalguni', 'Hasta',
+        'Chitra', 'Swati', 'Vishakha', 'Anuradha', 'Jyeshtha', 'Mula', 'Purva Ashadha',
+        'Uttara Ashadha', 'Shravana', 'Dhanishta', 'Shatabhisha', 'Purva Bhadrapada',
+        'Uttara Bhadrapada', 'Revati',
+    ]
+    nakshatra_index = int((math.degrees(ephem.Ecliptic(moon).lon) % 360) / (360 / 27))
+    doshas = ['Vata', 'Pitta', 'Kapha']
+
+    return {
+        'tithi': tithis[tithi_index],
+        'nakshatra': nakshatras[nakshatra_index],
+        'dosha': doshas[target_date.toordinal() % len(doshas)],
+    }
+
+
+def get_holiday_signals(target_date):
+    indian_holidays = holidays.country_holidays('IN', years=[target_date.year, target_date.year + 1])
+    holiday_today = indian_holidays.get(target_date)
+    upcoming = []
+    cursor = target_date
+    while len(upcoming) < 4 and cursor <= target_date + timedelta(days=370):
+        holiday_name = indian_holidays.get(cursor)
+        if holiday_name:
+            upcoming.append({'date': cursor.isoformat(), 'name': holiday_name})
+        cursor += timedelta(days=1)
+    return holiday_today, upcoming
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_zen_calendar(request):
-    current_tithi = calculate_tithi()
+    requested_date = request.query_params.get('date')
+    try:
+        target_date = date.fromisoformat(requested_date) if requested_date else date.today()
+    except ValueError:
+        return Response({'error': 'Use an ISO date in YYYY-MM-DD format.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    calendar = calculate_calendar(target_date)
+    current_tithi = calendar['tithi']
     
     if "Ekadashi" in current_tithi or "Purnima" in current_tithi:
         energy = "High (Zen Mode Optimal)"
@@ -143,7 +180,13 @@ def get_zen_calendar(request):
     else:
         energy = "Stable"
 
+    holiday, upcoming_holidays = get_holiday_signals(target_date)
     return Response({
-        "tithi": current_tithi,
-        "energy_status": energy
+        'date': target_date.isoformat(),
+        'tithi': current_tithi,
+        'nakshatra': calendar['nakshatra'],
+        'dosha': calendar['dosha'],
+        'energy_status': energy,
+        'holiday': {'name': holiday} if holiday else None,
+        'upcoming_holidays': upcoming_holidays,
     })

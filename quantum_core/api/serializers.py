@@ -5,7 +5,7 @@ from .models import Task
 class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
-        fields = ['id', 'title', 'is_completed', 'created_at']
+        fields = ['id', 'title', 'is_completed', 'priority', 'created_at']
 
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)

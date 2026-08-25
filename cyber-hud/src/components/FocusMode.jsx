@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, XCircle } from 'lucide-react';
 
@@ -8,17 +8,22 @@ export default function FocusMode({ task, onClose }) {
 
   useEffect(() => {
     let interval = null;
-    if (isActive && timeLeft > 0) {
+    if (isActive) {
       interval = setInterval(() => {
-        setTimeLeft((time) => time - 1);
+        setTimeLeft((time) => {
+          if (time <= 1) {
+            window.setTimeout(() => {
+              setIsActive(false);
+              alert("Matrix Focus Complete. Take a 5 minute break.");
+            }, 0);
+            return 0;
+          }
+          return time - 1;
+        });
       }, 1000);
-    } else if (timeLeft === 0) {
-      setIsActive(false);
-      clearInterval(interval);
-      alert("Matrix Focus Complete. Take a 5 minute break.");
     }
     return () => clearInterval(interval);
-  }, [isActive, timeLeft]);
+  }, [isActive]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
