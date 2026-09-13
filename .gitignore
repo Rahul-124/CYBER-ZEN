@@ -1,10 +1,25 @@
+# JavaScript dependencies and build output
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/build/
+
+
 # Python / Django Core
 venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py[cod]
+.pytest_cache/
+.coverage
+**/staticfiles/
 db.sqlite3
 
 # Environment Variables for Backend
 .env
+.env.*
+!.env.example
+
+
