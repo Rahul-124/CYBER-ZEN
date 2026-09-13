@@ -1,26 +1,53 @@
-# JavaScript dependencies and build output
-**/node_modules/
-**/dist/
-**/dist-ssr/
-**/build/
+# ==========================================
+# CENTRAL PRODUCTION .GITIGNORE
+# ==========================================
 
-
-# Python / Django Core
-venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py[cod]
-.pytest_cache/
-.coverage
-**/staticfiles/
-db.sqlite3
-
-# Environment Variables for Backend
+# --- Environment Variables & Credentials ---
 .env
 .env.*
 !.env.example
+*.env
 
-# Node dependencies
+# --- Python & Django ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+*.log
+local_settings.py
+
+# --- Virtual Environments ---
+.venv/
+venv/
+ENV/
+env/
+ENV*/
+
+# --- Node & Frontend (React/Vite) ---
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+dist/
+dist-ssr/
+*.local
+
+# --- Editor & OS Metadata ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.sublime-workspace
+*.sublime-project
