@@ -1,106 +1,335 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Calendar, CheckCircle, Circle, Eye, EyeOff, KeyRound, Lock, LogOut, Plus, Trash2, UserPlus, Zap } from 'lucide-react';
-import api from './services/api';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import LandingPage from './components/LandingPage';
+import DemoDashboard from './components/DemoDashboard';
 import FocusMode from './components/FocusMode';
-
-const initialCalendar = { date: '', tithi: 'Scanning cosmos…', nakshatra: 'Calibrating…', dosha: 'Calibrating…', energy_status: 'Calculating…', holiday: null, upcoming_holidays: [] };
-const todayIso = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
-const priorityStyle = { high: 'border-fuchsia-400/50 bg-fuchsia-500/15 text-fuchsia-200', medium: 'border-amber-400/50 bg-amber-500/15 text-amber-200', low: 'border-cyan-400/50 bg-cyan-500/15 text-cyan-200' };
-
-function ParticleBurst({ origin }) {
-  if (!origin) return null;
-  return <div className="pointer-events-none fixed inset-0 z-[120] overflow-hidden">{Array.from({ length: 14 }, (_, index) => {
-    const angle = (Math.PI * 2 * index) / 14;
-    const distance = 45 + (index % 5) * 20;
-    return <motion.span key={`${origin.id}-${index}`} initial={{ left: origin.x, top: origin.y, opacity: 1, scale: 1 }} animate={{ left: origin.x + Math.cos(angle) * distance, top: origin.y + Math.sin(angle) * distance, opacity: 0, scale: 0 }} transition={{ duration: 0.65, delay: index * 0.025, ease: 'easeOut' }} className="absolute h-2 w-2 rounded-full bg-gradient-to-r from-cyan-300 to-fuchsia-400 shadow-[0_0_12px_rgba(34,211,238,.9)]" />;
-  })}</div>;
-}
-
-function ProgressRing({ complete, total }) {
-  const percentage = total ? Math.round((complete / total) * 100) : 0;
-  const circumference = 2 * Math.PI * 45;
-  return <div className="relative mx-auto h-40 w-40"><svg viewBox="0 0 100 100" className="h-full w-full -rotate-90"><defs><linearGradient id="sync-progress" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#22d3ee" /><stop offset="100%" stopColor="#e879f9" /></linearGradient></defs><circle cx="50" cy="50" r="45" fill="none" stroke="rgba(34,211,238,.12)" strokeWidth="3" /><motion.circle cx="50" cy="50" r="45" fill="none" stroke="url(#sync-progress)" strokeWidth="4" strokeLinecap="round" strokeDasharray={circumference} animate={{ strokeDashoffset: circumference * (1 - percentage / 100) }} transition={{ duration: 0.65, ease: 'easeOut' }} /></svg><div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-3xl font-bold text-cyan-100">{percentage}%</span><span className="mt-1 text-xs text-cyan-200/55">{complete}/{total} complete</span></div></div>;
-}
-
-function AuthShell({ children }) {
-  return <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020611] px-4 py-10 text-cyan-50"><motion.div animate={{ backgroundPosition: ['0% 0%', '100% 100%'] }} transition={{ duration: 24, repeat: Infinity, ease: 'linear' }} className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(45deg, rgba(34,211,238,.35) 1px, transparent 1px)', backgroundSize: '48px 48px' }} /><div className="pointer-events-none absolute -left-36 top-8 h-96 w-96 rounded-full bg-cyan-500/15 blur-3xl" /><div className="pointer-events-none absolute -bottom-40 -right-20 h-96 w-96 rounded-full bg-fuchsia-500/15 blur-3xl" />{children}</div>;
-}
-
-function AuthForm({ onAuthenticated }) {
-  const [mode, setMode] = useState('login');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [resetUid, setResetUid] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const clearFeedback = () => { setError(''); setMessage(''); };
-  const inputClass = 'w-full rounded-xl border border-cyan-300/20 bg-black/40 px-4 py-3 text-cyan-50 placeholder:text-cyan-100/30 outline-none transition focus:border-cyan-300/70';
-  const passwordInput = (value, setter, placeholder) => <div className="relative"><input type={showPassword ? 'text' : 'password'} value={value} onChange={(event) => setter(event.target.value)} placeholder={placeholder} className={`${inputClass} pr-12`} required /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-100/40 hover:text-cyan-200">{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div>;
-  const login = async (event) => { event.preventDefault(); clearFeedback(); try { const response = await api.post('/api/token/', { username, password }); localStorage.setItem('access_token', response.data.access); localStorage.setItem('refresh_token', response.data.refresh); setScanning(true); setTimeout(onAuthenticated, 1050); } catch { setError('Invalid Quantum Credentials'); } };
-  const register = async (event) => { event.preventDefault(); clearFeedback(); try { await api.post('/api/register/', { username, email, password }); setMessage('Identity created. Authenticate to initialize your sync.'); setMode('login'); } catch (requestError) { setError(requestError.response?.data?.username?.[0] || 'Registration failed. Check password strength.'); } };
-  const requestReset = async (event) => { event.preventDefault(); clearFeedback(); try { const response = await api.post('/api/password-reset/', { email }); setMessage(response.data.message); setResetUid(response.data.uid || ''); setMode('reset_confirm'); } catch { setError('Unable to dispatch a recovery token.'); } };
-  const confirmReset = async (event) => { event.preventDefault(); clearFeedback(); try { const response = await api.post('/api/password-reset/confirm/', { uid: resetUid, token: resetToken, new_password: newPassword }); setMessage(response.data.message); setMode('login'); } catch (requestError) { setError(requestError.response?.data?.error || 'Password reset failed.'); } };
-  const backToLogin = () => { clearFeedback(); setMode('login'); };
-  if (scanning) return <AuthShell><motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10 w-full max-w-md rounded-3xl border border-cyan-300/25 bg-black/45 p-10 text-center backdrop-blur-xl"><motion.div animate={{ rotate: 360 }} transition={{ duration: 1.7, repeat: Infinity, ease: 'linear' }} className="mx-auto h-32 w-32 rounded-full border-2 border-transparent border-r-fuchsia-400 border-t-cyan-300" /><div className="relative -mt-[74px] mx-auto h-4 w-4 rounded-full bg-cyan-300 shadow-[0_0_22px_rgba(34,211,238,1)]" /><p className="mt-16 text-sm tracking-[.25em] text-cyan-200">BIOMETRIC SYNC IN PROGRESS…</p></motion.div></AuthShell>;
-  return <AuthShell><motion.div key={mode} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 w-full max-w-md rounded-3xl border border-cyan-300/20 bg-black/45 p-8 shadow-[0_0_45px_rgba(34,211,238,.16)] backdrop-blur-xl"><div className="mb-7 text-center"><motion.div animate={{ y: [0, -4, 0] }} transition={{ duration: 2.5, repeat: Infinity }} className="text-3xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300">CYBER_ZEN</motion.div><p className="mt-2 text-xs tracking-[.22em] text-cyan-200/60">QUANTUM LIFE TRACKER</p></div>
-    {mode === 'login' && <form onSubmit={login} className="space-y-4"><div className="flex items-center justify-center gap-2 text-cyan-300"><Lock size={20} /><h1 className="text-sm tracking-[.2em]">IDENTITY AUTH</h1></div><input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" className={inputClass} required />{passwordInput(password, setPassword, 'Password')}<button className="w-full rounded-xl bg-gradient-to-r from-cyan-400 to-fuchsia-500 py-3 font-bold text-slate-950 transition hover:brightness-110">INITIALIZE QUANTUM SYNC</button><div className="flex justify-between text-xs text-cyan-100/55"><button type="button" onClick={() => { clearFeedback(); setMode('register'); }} className="hover:text-cyan-200">Create Identity</button><button type="button" onClick={() => { clearFeedback(); setMode('reset_request'); }} className="hover:text-fuchsia-200">Forgot Password?</button></div></form>}
-    {mode === 'register' && <form onSubmit={register} className="space-y-4"><div className="flex items-center justify-center gap-2 text-fuchsia-300"><UserPlus size={20} /><h1 className="text-sm tracking-[.2em]">NEW IDENTITY</h1></div><input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Username" className={inputClass} required /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className={inputClass} required />{passwordInput(password, setPassword, 'Password (letters + numbers)')}<button className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-cyan-400 py-3 font-bold text-slate-950">REGISTER CORE NODE</button><button type="button" onClick={backToLogin} className="flex w-full items-center justify-center gap-2 pt-1 text-xs text-cyan-100/55 hover:text-cyan-200"><ArrowLeft size={14} /> Back to Auth</button></form>}
-    {mode === 'reset_request' && <form onSubmit={requestReset} className="space-y-4"><div className="flex items-center justify-center gap-2 text-cyan-300"><KeyRound size={20} /><h1 className="text-sm tracking-[.2em]">RECOVER IDENTITY</h1></div><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Registered email" className={inputClass} required /><button className="w-full rounded-xl bg-cyan-400 py-3 font-bold text-slate-950">DISPATCH TOKEN</button><button type="button" onClick={backToLogin} className="flex w-full items-center justify-center gap-2 pt-1 text-xs text-cyan-100/55 hover:text-cyan-200"><ArrowLeft size={14} /> Back to Auth</button></form>}
-    {mode === 'reset_confirm' && <form onSubmit={confirmReset} className="space-y-4"><div className="flex items-center justify-center gap-2 text-fuchsia-300"><KeyRound size={20} /><h1 className="text-sm tracking-[.2em]">ENTER RESET TOKEN</h1></div><input value={resetUid} onChange={(event) => setResetUid(event.target.value)} placeholder="UID" className={inputClass} required /><input value={resetToken} onChange={(event) => setResetToken(event.target.value)} placeholder="Token" className={inputClass} required />{passwordInput(newPassword, setNewPassword, 'New password')}<button className="w-full rounded-xl bg-fuchsia-400 py-3 font-bold text-slate-950">CONFIRM NEW PASSWORD</button><button type="button" onClick={backToLogin} className="flex w-full items-center justify-center gap-2 pt-1 text-xs text-cyan-100/55 hover:text-cyan-200"><ArrowLeft size={14} /> Back to Auth</button></form>}
-    {error && <p className="mt-4 text-center text-xs text-red-300">{error}</p>}{message && <p className="mt-4 text-center text-xs text-cyan-200">{message}</p>}</motion.div></AuthShell>;
-}
-
-function Dashboard({ onLogout }) {
-  const [tasks, setTasks] = useState([]);
-  const [newTask, setNewTask] = useState('');
-  const [priority, setPriority] = useState('medium');
-  const [focusTask, setFocusTask] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(todayIso());
-  const [calendarData, setCalendarData] = useState(initialCalendar);
-  const [burst, setBurst] = useState(null);
-  const [notice, setNotice] = useState('');
-  const fetchTasks = useCallback(async () => {
-    const response = await api.get('/api/tasks/');
-    setTasks(Array.isArray(response.data) ? response.data : []);
-  }, []);
-  const fetchCalendar = useCallback(async (date) => {
-    const response = await api.get('/api/calendar/', { params: { date } });
-    setCalendarData({
-      ...initialCalendar,
-      ...response.data,
-      upcoming_holidays: Array.isArray(response.data?.upcoming_holidays) ? response.data.upcoming_holidays : [],
-    });
-  }, []);
-  useEffect(() => {
-    const synchronize = window.setTimeout(() => {
-      Promise.all([fetchTasks(), fetchCalendar(selectedDate)]).catch(() => setNotice('Unable to synchronize your dashboard. Please reconnect.'));
-    }, 0);
-    return () => window.clearTimeout(synchronize);
-  }, [fetchCalendar, fetchTasks, selectedDate]);
-  const addTask = async (event) => { event.preventDefault(); const title = newTask.trim(); if (!title) return; try { const response = await api.post('/api/tasks/', { title, priority, is_completed: false }); setTasks((current) => [response.data, ...current]); setNewTask(''); } catch { setNotice('Task sync failed. Try again.'); } };
-  const toggleTask = async (task) => { try { const response = await api.patch(`/api/tasks/${task.id}/`, { is_completed: !task.is_completed }); setTasks((current) => current.map((item) => item.id === task.id ? response.data : item)); } catch { setNotice('Could not update task status.'); } };
-  const deleteTask = async (task, event) => { event.stopPropagation(); const origin = { id: task.id, x: event.clientX, y: event.clientY }; setBurst(origin); try { await api.delete(`/api/tasks/${task.id}/`); window.setTimeout(() => setTasks((current) => current.filter((item) => item.id !== task.id)), 280); } catch { setNotice('Could not remove the task.'); } finally { window.setTimeout(() => setBurst(null), 750); } };
-  const completed = tasks.filter((task) => task.is_completed).length;
-  const formattedDate = selectedDate ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
-  return <div className="min-h-screen overflow-hidden bg-[#020611] text-cyan-50"><div className="pointer-events-none fixed inset-0 opacity-30" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(34,211,238,.035) 0px, rgba(34,211,238,.035) 1px, transparent 1px, transparent 4px)' }} /><div className="pointer-events-none fixed -right-40 top-12 h-[30rem] w-[30rem] rounded-full bg-fuchsia-500/10 blur-3xl" /><div className="pointer-events-none fixed -bottom-48 -left-20 h-[30rem] w-[30rem] rounded-full bg-cyan-500/10 blur-3xl" /><ParticleBurst origin={burst} />
-    <header className="relative z-10 border-b border-cyan-300/15 bg-black/25 backdrop-blur-md"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-8"><div><h1 className="text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-fuchsia-400">CYBER_ZEN</h1><p className="mt-1 text-[10px] tracking-[.25em] text-cyan-100/50">QUANTUM LIFE TRACKER</p></div><div className="flex items-center gap-4"><div className="hidden text-right sm:block"><p className="text-xs text-cyan-200">{calendarData.tithi}</p><p className="text-[10px] tracking-wider text-cyan-100/45">ENERGY: {calendarData.energy_status}</p></div><button onClick={onLogout} className="flex items-center gap-2 rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-2 text-xs text-fuchsia-200 transition hover:bg-fuchsia-500/20"><LogOut size={15} /> DISCONNECT</button></div></div></header>
-    <main className="relative z-10 mx-auto grid max-w-7xl gap-6 px-5 py-8 md:px-8 lg:grid-cols-3"><section className="space-y-5 lg:col-span-2"><motion.form initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} onSubmit={addTask} className="rounded-2xl border border-cyan-300/30 bg-white/[.045] p-4 shadow-[0_0_30px_rgba(34,211,238,.1)] backdrop-blur-xl md:p-6"><label htmlFor="new-task" className="mb-3 flex items-center gap-2 text-xs tracking-[.18em] text-cyan-200"><Plus size={17} /> CRYSTALLIZE YOUR INTENTION</label><div className="flex flex-col gap-3 sm:flex-row"><input id="new-task" value={newTask} onChange={(event) => setNewTask(event.target.value)} placeholder="Add an objective…" className="min-w-0 flex-1 rounded-xl border border-cyan-300/20 bg-black/35 px-4 py-3 outline-none transition placeholder:text-cyan-100/30 focus:border-cyan-300/60" /><select value={priority} onChange={(event) => setPriority(event.target.value)} className="rounded-xl border border-cyan-300/20 bg-slate-950 px-3 py-3 text-sm text-cyan-100 outline-none focus:border-cyan-300/60"><option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option></select><button className="rounded-xl bg-gradient-to-r from-cyan-400 to-fuchsia-500 px-6 py-3 text-sm font-bold text-slate-950 transition hover:brightness-110">SYNC</button></div></motion.form>
-      <div><div className="mb-3 flex items-center justify-between"><h2 className="text-xs tracking-[.2em] text-cyan-200">NEURAL TASKS ({tasks.length})</h2><span className="text-xs text-cyan-100/45">{completed} synchronized</span></div><AnimatePresence initial={false}>{tasks.map((task) => <motion.article key={task.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 80, filter: 'blur(7px)' }} className={`group mb-3 flex items-center gap-3 rounded-xl border p-4 transition ${task.is_completed ? 'border-cyan-300/15 bg-cyan-500/[.06] opacity-60' : 'border-cyan-300/25 bg-white/[.045] hover:border-cyan-300/55 hover:bg-white/[.07]'}`}><button onClick={() => toggleTask(task)} aria-label={task.is_completed ? 'Mark incomplete' : 'Mark complete'} className="shrink-0 text-cyan-300">{task.is_completed ? <CheckCircle size={23} /> : <Circle size={23} />}</button><button onClick={() => toggleTask(task)} className={`min-w-0 flex-1 text-left text-base ${task.is_completed ? 'text-cyan-100/60 line-through' : 'text-cyan-50'}`}>{task.title}</button><span className={`hidden rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider sm:inline ${priorityStyle[task.priority] || priorityStyle.medium}`}>{task.priority || 'medium'}</span>{!task.is_completed && <button onClick={() => setFocusTask(task)} title="Enter Focus Mode" className="rounded-lg bg-cyan-400/10 p-2 text-cyan-300 transition hover:bg-cyan-400/20"><Zap size={17} /></button>}<button onClick={(event) => deleteTask(task, event)} aria-label="Delete task" className="p-2 text-fuchsia-300/55 transition hover:text-fuchsia-200"><Trash2 size={17} /></button></motion.article>)}</AnimatePresence>{tasks.length === 0 && <p className="rounded-xl border border-dashed border-cyan-300/15 py-12 text-center text-sm text-cyan-100/40">No tasks synchronized. The day awaits your intention.</p>}</div></section>
-      <aside className="space-y-5"><section className="rounded-2xl border border-cyan-300/25 bg-white/[.045] p-6 text-center backdrop-blur-xl"><h2 className="mb-5 text-xs tracking-[.2em] text-cyan-200">SYNCHRONIZATION STATUS</h2><ProgressRing complete={completed} total={tasks.length} /><p className="mt-4 text-xs text-cyan-100/55">Neural alignment {tasks.length && completed === tasks.length ? 'complete' : 'in progress'}</p></section><section className="rounded-2xl border border-cyan-300/25 bg-white/[.045] p-6 backdrop-blur-xl"><div className="mb-4 flex items-center gap-2 text-xs tracking-[.18em] text-cyan-200"><Calendar size={17} /> TEMPORAL ALIGNMENT</div><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="mb-4 w-full rounded-lg border border-cyan-300/20 bg-slate-950 px-3 py-2 text-sm text-cyan-100 outline-none focus:border-cyan-300/65" /><p className="mb-4 text-sm font-semibold leading-6 text-cyan-50">{formattedDate}</p>{calendarData.holiday && <div className="mb-4 rounded-lg border border-amber-300/40 bg-amber-400/10 p-3 text-left"><p className="text-sm font-semibold text-amber-100">{calendarData.holiday.name}</p><p className="mt-1 text-[10px] tracking-wider text-amber-200/65">FESTIVAL DAY</p></div>}<div className="space-y-2 text-left">{[['TITHI · Lunar day', calendarData.tithi, 'border-cyan-300/20'], ['NAKSHATRA · Star', calendarData.nakshatra, 'border-fuchsia-300/20'], ['DOSHA · Constitution', calendarData.dosha, 'border-amber-300/20']].map(([label, value, border]) => <div key={label} className={`rounded-lg border ${border} bg-black/20 p-3`}><p className="text-[10px] tracking-wider text-cyan-100/45">{label}</p><p className="mt-1 text-sm text-cyan-50">{value}</p></div>)}</div></section><section className="rounded-2xl border border-cyan-300/25 bg-white/[.045] p-6 backdrop-blur-xl"><h2 className="mb-3 text-xs tracking-[.18em] text-cyan-200">COSMIC CALENDAR</h2><div className="space-y-2">{calendarData.upcoming_holidays.map((holiday) => <div key={`${holiday.date}-${holiday.name}`} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition hover:bg-white/[.05]"><div><p className="text-sm text-cyan-50">{holiday.name}</p><p className="text-[10px] text-cyan-100/45">{new Date(`${holiday.date}T12:00:00`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p></div><span className="text-xs text-amber-200">◈</span></div>)}{calendarData.upcoming_holidays.length === 0 && <p className="py-2 text-xs text-cyan-100/45">No upcoming holiday signals.</p>}</div></section></aside></main>
-    {notice && <button onClick={() => setNotice('')} className="fixed bottom-5 right-5 z-50 rounded-xl border border-amber-300/40 bg-slate-950 px-4 py-3 text-xs text-amber-100 shadow-xl">{notice}</button>}<AnimatePresence>{focusTask && <FocusMode task={focusTask} onClose={() => setFocusTask(null)} />}</AnimatePresence></div>;
-}
+import ForgotPassword from './components/ForgotPassword';
+import ResetPasswordConfirm from './components/ResetPasswordConfirm';
+import api from './services/api';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(localStorage.getItem('access_token')));
-  const logout = () => { localStorage.removeItem('access_token'); localStorage.removeItem('refresh_token'); setIsAuthenticated(false); };
-  return <AnimatePresence mode="wait">{isAuthenticated ? <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><Dashboard onLogout={logout} /></motion.div> : <motion.div key="auth" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><AuthForm onAuthenticated={() => setIsAuthenticated(true)} /></motion.div>}</AnimatePresence>;
+  const [token, setToken] = useState(localStorage.getItem('access_token') || null);
+  const [activeFocusTask, setActiveFocusTask] = useState(null);
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    setToken(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0c] text-gray-100 selection:bg-emerald-500 selection:text-black font-sans">
+      <Routes>
+        {/* Public Landing Page */}
+        <Route path="/" element={<LandingPage />} />
+
+        {/* Zero-Friction Client-Side Demo */}
+        <Route 
+          path="/demo" 
+          element={<DemoDashboard onStartFocus={(task) => setActiveFocusTask(task)} />} 
+        />
+
+        {/* Authentication Wall */}
+        <Route 
+          path="/login" 
+          element={
+            token ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <AuthWall onLoginSuccess={(newToken) => setToken(newToken)} />
+            )
+          } 
+        />
+
+        {/* Authenticated Cloud Dashboard */}
+        <Route 
+          path="/dashboard" 
+          element={
+            token ? (
+              <CloudDashboard 
+                onLogout={handleLogout} 
+                onStartFocus={(task) => setActiveFocusTask(task)} 
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+
+        {/* Password Recovery Flows */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:uid/:token" element={<ResetPasswordConfirm />} />
+
+        {/* Fallback Catch-All */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
+      {/* Global Focus Engine Overlay */}
+      {activeFocusTask && (
+        <FocusMode 
+          task={activeFocusTask} 
+          onClose={() => setActiveFocusTask(null)} 
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Sub-View: Auth Wall (Login & Registration) ---
+function AuthWall({ onLoginSuccess }) {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setIsLoading(true);
+
+    const endpoint = isRegistering ? '/api/register/' : '/api/token/';
+    try {
+      const response = await api.post(endpoint, { username, password });
+      
+      if (isRegistering) {
+        // Automatically login after successful registration
+        const loginRes = await api.post('/api/token/', { username, password });
+        localStorage.setItem('access_token', loginRes.data.access);
+        localStorage.setItem('refresh_token', loginRes.data.refresh);
+        onLoginSuccess(loginRes.data.access);
+      } else {
+        localStorage.setItem('access_token', response.data.access);
+        localStorage.setItem('refresh_token', response.data.refresh);
+        onLoginSuccess(response.data.access);
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-[#121318] border border-gray-800 rounded-xl p-8 shadow-2xl backdrop-blur-sm">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+            {isRegistering ? 'INITIALIZE IDENTITY' : 'QUANTUM ACCESS'}
+          </h2>
+          <p className="text-xs text-gray-400 mt-2 uppercase tracking-widest">
+            {isRegistering ? 'Register your node on the network' : 'Authenticate to sync tasks to cloud'}
+          </p>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-6 p-3 bg-red-950/50 border border-red-800/80 rounded text-red-300 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs uppercase font-medium text-gray-400 mb-1">Username</label>
+            <input 
+              type="text"
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full bg-[#0a0a0c] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase font-medium text-gray-400 mb-1">Password</label>
+            <div className="relative">
+              <input 
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-[#0a0a0c] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-emerald-500 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-gray-500 hover:text-gray-300"
+              >
+                {showPassword ? 'HIDE' : 'SHOW'}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-2.5 mt-2 bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-black font-semibold text-xs uppercase tracking-wider rounded transition-all disabled:opacity-50"
+          >
+            {isLoading ? 'Decrypting...' : isRegistering ? 'Create Quantum Identity' : 'Establish Link'}
+          </button>
+        </form>
+
+        <div className="mt-6 flex flex-col items-center gap-3 text-xs text-gray-400">
+          <button 
+            type="button"
+            onClick={() => { setIsRegistering(!isRegistering); setErrorMsg(''); }}
+            className="hover:text-emerald-400 underline underline-offset-4"
+          >
+            {isRegistering ? 'Already registered? Log In' : 'Need credentials? Register here'}
+          </button>
+          
+          <button 
+            type="button"
+            onClick={() => navigate('/demo')}
+            className="text-gray-500 hover:text-gray-300"
+          >
+            ← Return to Offline Demo Mode
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Sub-View: Authenticated Cloud Dashboard ---
+function CloudDashboard({ onLogout, onStartFocus }) {
+  const [tasks, setTasks] = useState([]);
+  const [newTitle, setNewTitle] = useState('');
+  const [priority, setPriority] = useState('MEDIUM');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = async () => {
+    try {
+      const res = await api.get('/api/tasks/');
+      setTasks(res.data);
+    } catch (err) {
+      console.error('Failed to pull tasks from cloud node', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+
+    try {
+      const res = await api.post('/api/tasks/', { title: newTitle, priority });
+      setTasks([res.data, ...tasks]);
+      setNewTitle('');
+    } catch (err) {
+      console.error('Task creation failed', err);
+    }
+  };
+
+  const handleToggle = async (task) => {
+    try {
+      const res = await api.patch(`/api/tasks/${task.id}/`, { completed: !task.completed });
+      setTasks(tasks.map(t => t.id === task.id ? res.data : t));
+    } catch (err) {
+      console.error('Toggle failed', err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/api/tasks/${id}/`);
+      setTasks(tasks.filter(t => t.id !== id));
+    } catch (err) {
+      console.error('Deletion failed', err);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <header className="flex justify-between items-center py-6 border-b border-gray-800">
+        <div>
+          <h1 className="text-2xl font-bold tracking-wider text-emerald-400">CYBER ZEN // CLOUD NODE</h1>
+          <p className="text-xs text-gray-500 uppercase tracking-widest">Neon PostgreSQL Linked • Realtime Persistent</p>
+        </div>
+        <button
+          onClick={onLogout}
+          className="px-4 py-2 border border-red-900/60 hover:bg-red-950/40 text-red-400 rounded text-xs tracking-wider uppercase transition-colors"
+        >
+          Disconnect
+        </button>
+      </header>
+
+      <form onSubmit={handleCreate} className="my-8 flex gap-3">
+        <input 
+          type="text"
+          placeholder="Queue next quantum objective..."
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          className="flex-1 bg-[#121318] border border-gray-800 rounded-lg px-4 py-3 text-sm text-gray-200 focus:outline-none focus:border-emerald-500"
+        />
+        <select 
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          className="bg-[#121318] border border-gray-800 rounded-lg px-3 py-3 text-xs text-gray-300 focus:outline-none focus:border-emerald-500"
+        >
+          <option value="LOW">LOW</option>
+          <option value="MEDIUM">MEDIUM</option>
+          <option value="HIGH">HIGH</option>
+        </select>
+        <button 
+          type="submit"
+          className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs tracking-wider uppercase rounded-lg transition-colors"
+        >
+          Add Task
+        </button>
+      </form>
+
+      <div className="space-y-3">
+        {loading ? (
+          <p className="text-xs text-gray-500 tracking-widest uppercase">Querying cluster...</p>
+        ) : tasks.length === 0 ? (
+          <p className="text-xs text-gray-500 tracking-widest uppercase">No tasks active. Add one above.</p>
+        ) : (
+          tasks.map(task => (
+            <div 
+              key={task.id}
+              className="flex items-center justify-between p-4 bg-[#121318] border border-gray-800/80 rounded-lg hover:border-gray-700 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <input 
+                  type="checkbox"
+                  checked={task.completed}
+                  onChange={() => handleToggle(task)}
+                  className="w-4 h-4 rounded border-gray-700 text-emerald-500 focus:ring-0 bg-transparent cursor-pointer"
+                />
+                <span className={`text-sm ${task.completed ? 'line-through text-gray-500' : 'text-gray-200'}`}>
+                  {task.title}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 border border-gray-800 text-gray-400 rounded">
+                  {task.priority || 'MEDIUM'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onStartFocus(task)}
+                  className="px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs transition-colors"
+                >
+                  ⚡ Focus
+                </button>
+                <button
+                  onClick={() => handleDelete(task.id)}
+                  className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded text-xs transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
