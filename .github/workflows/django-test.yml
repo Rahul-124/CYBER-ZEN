@@ -30,6 +30,9 @@ jobs:
 
       
       - name: Run Django System Check
+        env:
+          SECRET_KEY: "dummy-secret-key-for-github-actions"
+          DEBUG: "True"
         run: |
           cd quantum_core
           python manage.py check
