@@ -135,4 +135,4 @@ python manage.py check
 
 ## Author
 
-Built by [Nitish](https://github.com/Rahul-124). If Cyber Zen helped or inspired you, a star on the repository is appreciated.
+Built by [Nitish Kumar](/Rahul-124). If Cyber Zen helped or inspired you, a star on the repository is appreciated.
